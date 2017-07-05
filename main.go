@@ -29,11 +29,15 @@ const(
 
 func promptPassword() string {
 	fmt.Print("Password: ")
-	return string(gopass.GetPasswd())
+	if data, errData := gopass.GetPasswd(); errData != nil {
+		return ``
+	} else {
+		return string(data)
+	}
 }
 
 func main() {
-	var host string 
+	var host string
 	var username string
 	var password string
 
@@ -71,7 +75,7 @@ func main() {
 
 		}
 	}
-		
+
 	// Finding host in config file or using the one passed in param
 	host = *_host
 	hostFound := false
