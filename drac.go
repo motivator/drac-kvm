@@ -110,7 +110,6 @@ func (d *DRAC) GetVersion() int {
 		defer response.Body.Close()
 		if response.StatusCode == 200 {
 			for _, c := range response.Cookies() {
-				log.Printf(c.Name + " = " + c.Value)
 				if "sessionKey" == c.Name && c.Value != "" {
 					d.SessionKey = c.Value
 				}
