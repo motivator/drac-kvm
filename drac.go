@@ -17,16 +17,18 @@ import (
 // DRAC contains all of the information required
 // to connect to a Dell DRAC KVM
 type DRAC struct {
-	Host     string
-	Username string
-	Password string
-	Version  int
+	Host       string
+	Username   string
+	Password   string
+	Version    int
+	SessionKey string
 }
 
 // Templates is a map of each viewer.jnlp template for
 // the various Dell iDRAC versions, keyed by version number
 var Templates = map[int]string{
 	1: ikvm169,
+	2: ilo2,
 	6: viewer6,
 	7: viewer7,
 }
@@ -42,6 +44,7 @@ func init() {
 // there must be a better way to store this for re-use
 // look at setting the cookie properly?
 var SID = ""
+var sessionkey = ""
 
 // createHTTPClient for connection re-use
 func createHTTPClient() *http.Client {
@@ -81,7 +84,7 @@ func debug(data []byte, err error) {
 // Retursn the version if found, or -1 if unknown
 func (d *DRAC) GetVersion() int {
 
-	log.Print("Detecting iDRAC version...")
+	log.Print("Detecting version...")
 
 	version := -1
 
@@ -98,6 +101,21 @@ func (d *DRAC) GetVersion() int {
 		defer response.Body.Close()
 		if response.StatusCode == 200 {
 			return 6
+		}
+	}
+
+	// Check for iLO specific file
+	var json_string = []byte("{\"method\":\"login\",\"user_login\":\""+d.Username+"\",\"password\":\""+d.Password+"\"}")
+	if response, err := httpClient.Post("https://" + d.Host + "/json/login_session", "application/json", bytes.NewBuffer(json_string)); err == nil {
+		defer response.Body.Close()
+		if response.StatusCode == 200 {
+			for _, c := range response.Cookies() {
+				log.Printf(c.Name + " = " + c.Value)
+				if "sessionKey" == c.Name && c.Value != "" {
+					d.SessionKey = c.Value
+				}
+			}
+			return 2
 		}
 	}
 
@@ -170,6 +188,14 @@ func (d *DRAC) Viewer() (string, error) {
 			msg := fmt.Sprintf("no support for DRAC v%d", version)
 			return "", errors.New(msg)
 		}
+
+		// Generate a JNLP viewer from the template
+		// Injecting the host/user/pass information
+		buff := bytes.NewBufferString("")
+		err := template.Must(template.New("viewer").Parse(Templates[version])).Execute(buff, d)
+		return buff.String(), err
+	} else if version == 2 {
+		log.Printf("Found iLO")
 
 		// Generate a JNLP viewer from the template
 		// Injecting the host/user/pass information
